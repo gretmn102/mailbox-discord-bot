@@ -18,6 +18,7 @@ type EditAction =
     | To of UserId
     | From of string
     | Description of string
+    | ImageUrl of string
     | Return
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
@@ -35,6 +36,7 @@ module EditAction =
             let from = "от"
             let description = "описание"
             let returnToMails = "вернуться"
+            let image = "картинка"
 
         let pdisplay: _ Parser =
             let p =
@@ -63,6 +65,13 @@ module EditAction =
 
             p |>> Description
 
+        let pimage: _ Parser =
+            let p =
+                skipStringCI CommandNames.image .>> spaces
+                >>. manySatisfy (fun _ -> true)
+
+            p |>> ImageUrl
+
         let preturnToMails: _ Parser =
             let p =
                 skipStringCI CommandNames.returnToMails
@@ -75,6 +84,7 @@ module EditAction =
                 pto
                 pfrom
                 pdescription
+                pimage
                 preturnToMails
             ]
 
@@ -206,6 +216,7 @@ let reduce (msg: Msg) (state: State): State =
                 sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
                 sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
                 sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
+                sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
                 sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
             ]
             |> String.concat "\n"
@@ -242,6 +253,10 @@ let reduce (msg: Msg) (state: State): State =
             embed.Color <- Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
             embed.Description <- mail.Data.Description
             embed.WithAuthor(mail.Data.From) |> ignore
+
+            let imageUrl = mail.Data.ImageUrl
+            if not <| System.String.IsNullOrEmpty imageUrl then
+                embed.ImageUrl <- imageUrl
 
             let b = Entities.DiscordMessageBuilder()
             b.Content <-
@@ -303,6 +318,12 @@ let reduce (msg: Msg) (state: State): State =
                 update (fun mailData ->
                     { mailData with
                         Description = description
+                    }
+                )
+            | ImageUrl imageUrl ->
+                update (fun mailData ->
+                    { mailData with
+                        ImageUrl = imageUrl
                     }
                 )
             | Return ->

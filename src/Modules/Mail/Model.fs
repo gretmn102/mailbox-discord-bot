@@ -23,6 +23,7 @@ module Mails =
             IsDelivered: bool
             Description: string
             From: string
+            ImageUrl: string
         }
         static member Empty =
             {
@@ -31,6 +32,7 @@ module Mails =
                 IsDelivered = false
                 Description = "(пусто)"
                 From = "Аноним"
+                ImageUrl = ""
             }
         static member Serialize (data: MailData) =
             data |> Json.ser
