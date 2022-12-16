@@ -195,7 +195,7 @@ let reduce (msg: Msg) (state: State): State =
                 "Доступные команды:"
                 sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" MainAction.Parser.CommandNames.createMail
                 sprintf "• `%s` — отображает список написанных писем;" MainAction.Parser.CommandNames.displayMails
-                sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s`" MainAction.Parser.CommandNames.editMail MainAction.Parser.CommandNames.displayMails
+                sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail MainAction.Parser.CommandNames.displayMails
             ]
             |> String.concat "\n"
 
@@ -414,8 +414,27 @@ let reduce (msg: Msg) (state: State): State =
 
                 getMails <| fun mails ->
 
-                mails
-                |> List.mapi (fun i mailId -> sprintf "%d %s" i mailId) // TODO
+                [
+                    "№ | кому | описание"
+                    yield! mails
+                    |> List.mapi (fun i mailId ->
+                        match Mails.MailDb.tryFindById mailId state.Mails with
+                        | Some mail ->
+                            let description =
+                                let maxLength = 64
+                                let description =
+                                    mail.Data.Description
+                                    |> String.replace "\n" " "
+                                if description.Length < maxLength then
+                                    description
+                                else
+                                    description.[0..maxLength - 1]
+
+                            sprintf "%d | <@%d> | %s" i mail.Data.Recipient description
+                        | None ->
+                            sprintf "%d %s" i mailId
+                    )
+                ]
                 |> String.concat "\n"
                 |> send
 
