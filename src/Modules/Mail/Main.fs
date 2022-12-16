@@ -172,7 +172,15 @@ let reduce (msg: Msg) (state: State): State =
                         e.Author.Id
                         id
 
-                "TODO: приветствие и список команд"
+                [
+                    "Хо-хо-хо! Я — бот, рассылающий поздравления людям под Новый год! <:satan:1044024010113032212>"
+                    sprintf "Введи `%s <id_пользователя>`, чтобы начать писать поздравление указанному пользователю. Например:" MainAction.Parser.CommandNames.createMail
+                    "```"
+                    sprintf "%s %d" MainAction.Parser.CommandNames.createMail client.CurrentUser.Id
+                    "```"
+                    "Начнешь писать письмо мне, но я все равно его не оценю, поэтому лучше направить свои силы на кого-то другого. После того, как напишешь, следуй моим указаниям."
+                ]
+                |> String.concat "\n"
                 |> send
 
                 { state with
@@ -182,6 +190,26 @@ let reduce (msg: Msg) (state: State): State =
             | Some userState ->
                 next userState
 
+        let mainCommands =
+            [
+                "Доступные команды:"
+                sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" MainAction.Parser.CommandNames.createMail
+                sprintf "• `%s` — отображает список написанных писем;" MainAction.Parser.CommandNames.displayMails
+                sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s`" MainAction.Parser.CommandNames.editMail MainAction.Parser.CommandNames.displayMails
+            ]
+            |> String.concat "\n"
+
+        let editCommands =
+            [
+                sprintf "Ты находишься в режиме редактирования письма. Доступные команды:"
+                sprintf "• `%s` — отображает письмо в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
+                sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
+                sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
+                sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
+                sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
+            ]
+            |> String.concat "\n"
+
         let parseCommandByUserState (userState: UserEditStates.Data) next =
             match userState.Data.Editing with
             | Some mailId ->
@@ -189,7 +217,7 @@ let reduce (msg: Msg) (state: State): State =
                 | Ok act ->
                     next (EditAction(act, mailId))
                 | Error msg ->
-                    sprintf "```\n%s\n```" msg
+                    editCommands
                     |> send
 
                     state
@@ -198,7 +226,7 @@ let reduce (msg: Msg) (state: State): State =
                 | Ok act ->
                     next (MainAction act)
                 | Error msg ->
-                    sprintf "```\n%s\n```" msg
+                    mainCommands
                     |> send
 
                     state
@@ -288,7 +316,7 @@ let reduce (msg: Msg) (state: State): State =
                             }
                         )
 
-                "todo: список команд"
+                mainCommands
                 |> send
 
                 { state with
@@ -321,6 +349,9 @@ let reduce (msg: Msg) (state: State): State =
                                 Editing = Some mail.Id
                             }
                         )
+
+                editCommands
+                |> send
 
                 displayMail mail
 
@@ -360,6 +391,9 @@ let reduce (msg: Msg) (state: State): State =
                         newMailId
                         mailData
 
+                editCommands
+                |> send
+
                 displayMail mail
 
                 { state with
@@ -373,7 +407,7 @@ let reduce (msg: Msg) (state: State): State =
                     | Some mails ->
                         next mails
                     | None ->
-                        "Ты не \nTODO: список команд"
+                        "Список писем пуст."
                         |> send
 
                         state
