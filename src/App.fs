@@ -20,21 +20,6 @@ let cmd pstart (client: DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.Messa
             | CommandParser.Pass -> ()
 
             | CommandParser.Unknown -> ()
-                // let b = DSharpPlus.Entities.DiscordEmbedBuilder()
-                // b.Description <-
-                //     [
-                //         "Неизвестная команда. Доступные команды:"
-                //         Mail.Main.Parser.CommandNames.toFish
-                //         Mail.Main.Parser.CommandNames.inspect
-                //         Mail.Main.Parser.CommandNames.inventory
-                //         Mail.Main.Parser.CommandNames.openUp
-                //         Mail.Main.Parser.CommandNames.progress
-                //         Mail.Main.Parser.CommandNames.setItems
-                //         Mail.Main.Parser.CommandNames.setSettings
-                //     ] |> String.concat "\n"
-
-                // b.Color <- DSharpPlus.Entities.Optional.FromValue(DiscordEmbed.backgroundColorDarkTheme)
-                // awaiti (client.SendMessageAsync (e.Channel, b.Build()))
 
             | CommandParser.MessageCreateEventHandler exec ->
                 exec (client, e)
@@ -131,7 +116,7 @@ let main argv =
         ))
 
         client.add_GuildDownloadCompleted(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            let activity = DSharpPlus.Entities.DiscordActivity("Разработка рыбалочки")
+            let activity = DSharpPlus.Entities.DiscordActivity("Собираю новогодние поздравления!")
             awaiti <| client.UpdateStatusAsync(activity)
 
             Task.CompletedTask
