@@ -128,12 +128,50 @@ module Mails =
         let tryFindByUserId (userId: UserId) (db: MailDb): Option<MailId list> =
             Map.tryFind userId db.UserMails
 
+        let removeByMail (mail: Mail) (items: MailDb): MailDb option =
+            let mailId = mail.Id
+            {
+                Db =
+                    let _, db = CommonDb.GuildData.removeById mailId items.Db
+                    db
+                UserMails =
+                    let authorId = mail.Data.Author
+                    match tryFindByUserId authorId items with
+                    | Some mails ->
+                        let mails =
+                            mails
+                            |> List.filter ((<>) mailId)
+                        if List.isEmpty mails then
+                            Map.remove authorId items.UserMails
+                        else
+                            Map.add authorId mails items.UserMails
+                    | None ->
+                        items.UserMails
+            }
+            |> Some
+
+        let removeByMailId mailId (items: MailDb): MailDb option =
+            tryFindById mailId items
+            |> Option.bind (fun mail ->
+                removeByMail mail items
+            )
+
         let tryFindByMailIndex (userId: UserId) (mailIndex: MailIndex) (db: MailDb): Mail option =
             Map.tryFind userId db.UserMails
             |> Option.bind (fun mails ->
                 if 0 <= mailIndex && mailIndex < mails.Length then
                     let mailId = mails.[mailIndex]
                     tryFindById mailId db
+                else
+                    None
+            )
+
+        let removeByMailIndex (userId: UserId) (mailIndex: MailIndex) (db: MailDb): MailDb option =
+            Map.tryFind userId db.UserMails
+            |> Option.bind (fun mails ->
+                if 0 <= mailIndex && mailIndex < mails.Length then
+                    let mailId = mails.[mailIndex]
+                    removeByMailId mailId db
                 else
                     None
             )

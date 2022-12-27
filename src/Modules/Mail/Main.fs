@@ -92,6 +92,7 @@ type MainAction =
     | CreateMail of UserId
     | DisplayMails
     | EditMail of MailIndex
+    | RemoveMail of MailIndex
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module MainAction =
@@ -106,6 +107,7 @@ module MainAction =
             let displayMails = "письма"
             let createMail = "создать"
             let editMail = "редактировать"
+            let removeMail = "удалить"
 
         let pdisplayMails: _ Parser =
             let p =
@@ -127,11 +129,19 @@ module MainAction =
 
             p |>> EditMail
 
+        let premoveMail: _ Parser =
+            let p =
+                skipStringCI CommandNames.removeMail .>> spaces
+                >>. pint32
+
+            p |>> RemoveMail
+
         let start: _ Parser =
             choice [
                 pdisplayMails
                 pcreateMail
                 peditMail
+                premoveMail
             ]
 
 type Action =
@@ -206,6 +216,7 @@ let reduce (msg: Msg) (state: State): State =
                 sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" MainAction.Parser.CommandNames.createMail
                 sprintf "• `%s` — отображает список написанных писем;" MainAction.Parser.CommandNames.displayMails
                 sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail MainAction.Parser.CommandNames.displayMails
+                sprintf "• `%s <индекс_письма>` — удалить письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.removeMail MainAction.Parser.CommandNames.displayMails
             ]
             |> String.concat "\n"
 
@@ -345,20 +356,55 @@ let reduce (msg: Msg) (state: State): State =
                 }
 
         | MainAction(act) ->
-            match act with
-            | EditMail mailIndex ->
-                let getMailByIndex (mailIndex: MailIndex) next =
-                    match Mails.MailDb.tryFindByMailIndex e.Author.Id mailIndex state.Mails with
-                    | Some mail ->
-                        next mail
+            let displayMails (mails: Mails.MailDb) =
+                let getMails next =
+                    match Mails.MailDb.tryFindByUserId e.Author.Id mails with
+                    | Some mails ->
+                        next mails
                     | None ->
-                        sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
-                            mailIndex
-                            MainAction.Parser.CommandNames.displayMails
+                        "Список писем пуст."
                         |> send
 
-                        state
+                getMails <| fun mails ->
 
+                [
+                    "№ | кому | описание"
+                    yield! mails
+                    |> List.mapi (fun i mailId ->
+                        match Mails.MailDb.tryFindById mailId state.Mails with
+                        | Some mail ->
+                            let description =
+                                let maxLength = 64
+                                let description =
+                                    mail.Data.Description
+                                    |> String.replace "\n" " "
+                                if description.Length < maxLength then
+                                    description
+                                else
+                                    description.[0..maxLength - 1]
+
+                            sprintf "%d | <@%d> | %s" i mail.Data.Recipient description
+                        | None ->
+                            sprintf "%d %s" i mailId
+                    )
+                ]
+                |> String.concat "\n"
+                |> send
+
+            let getMailByIndex (mailIndex: MailIndex) next =
+                match Mails.MailDb.tryFindByMailIndex e.Author.Id mailIndex state.Mails with
+                | Some mail ->
+                    next mail
+                | None ->
+                    sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
+                        mailIndex
+                        MainAction.Parser.CommandNames.displayMails
+                    |> send
+
+                    state
+
+            match act with
+            | EditMail mailIndex ->
                 getMailByIndex mailIndex <| fun mail ->
 
                 let userEditStates =
@@ -379,6 +425,28 @@ let reduce (msg: Msg) (state: State): State =
                 { state with
                     UserEditStates = userEditStates
                 }
+
+            | RemoveMail mailIndex ->
+                getMailByIndex mailIndex <| fun mail ->
+
+                match Mails.MailDb.removeByMail mail state.Mails with
+                | Some mails ->
+                    sprintf "Поздравление № %d удалено." mailIndex
+                    |> send
+
+                    displayMails mails
+
+                    { state with
+                        Mails = mails
+                    }
+                | None ->
+                    sprintf "Поздравление № %d не удалось удалить. Повторите еще раз." mailIndex
+                    |> send
+
+                    displayMails state.Mails
+
+                    state
+
             | CreateMail recipientId ->
                 let newMailId =
                     MailId.generateNew ()
@@ -423,41 +491,7 @@ let reduce (msg: Msg) (state: State): State =
                 }
 
             | DisplayMails ->
-                let getMails next =
-                    match Mails.MailDb.tryFindByUserId e.Author.Id state.Mails with
-                    | Some mails ->
-                        next mails
-                    | None ->
-                        "Список писем пуст."
-                        |> send
-
-                        state
-
-                getMails <| fun mails ->
-
-                [
-                    "№ | кому | описание"
-                    yield! mails
-                    |> List.mapi (fun i mailId ->
-                        match Mails.MailDb.tryFindById mailId state.Mails with
-                        | Some mail ->
-                            let description =
-                                let maxLength = 64
-                                let description =
-                                    mail.Data.Description
-                                    |> String.replace "\n" " "
-                                if description.Length < maxLength then
-                                    description
-                                else
-                                    description.[0..maxLength - 1]
-
-                            sprintf "%d | <@%d> | %s" i mail.Data.Recipient description
-                        | None ->
-                            sprintf "%d %s" i mailId
-                    )
-                ]
-                |> String.concat "\n"
-                |> send
+                displayMails state.Mails
 
                 state
 
