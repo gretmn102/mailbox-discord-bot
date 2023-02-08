@@ -72,6 +72,15 @@ let startServer () =
 
 [<EntryPoint>]
 let main argv =
+    let getBotToken next =
+        let tokenEnvVar = "BotToken"
+        match tryGetEnvironmentVariable tokenEnvVar with
+        | None ->
+            printfn "Environment variable `%s` is not set!" tokenEnvVar
+            1
+        | Some token ->
+            next token
+
     let getPostmanType next =
         let postmanTypeEnvVar = "PostmanType"
         match tryGetEnvironmentVariable postmanTypeEnvVar with
@@ -86,60 +95,54 @@ let main argv =
             | Ok postmanType ->
                 next postmanType
 
-    let tokenEnvVar = "BotToken"
+    getBotToken <| fun token ->
+    getPostmanType <| fun postmanType ->
+    let config = DSharpPlus.DiscordConfiguration()
 
-    match tryGetEnvironmentVariable tokenEnvVar with
-    | None ->
-        printfn "Environment variable `%s` is not set!" tokenEnvVar
-        1
-    | Some token ->
-        getPostmanType <| fun postmanType ->
-        let config = DSharpPlus.DiscordConfiguration()
+    config.set_Token token
+    config.set_TokenType DSharpPlus.TokenType.Bot
+    config.set_AutoReconnect true
+    config.set_Intents (
+        DSharpPlus.DiscordIntents.AllUnprivileged
+        ||| DSharpPlus.DiscordIntents.GuildMembers
+        ||| DSharpPlus.DiscordIntents.GuildPresences
+    )
 
-        config.set_Token token
-        config.set_TokenType DSharpPlus.TokenType.Bot
-        config.set_AutoReconnect true
-        config.set_Intents (
-            DSharpPlus.DiscordIntents.AllUnprivileged
-            ||| DSharpPlus.DiscordIntents.GuildMembers
-            ||| DSharpPlus.DiscordIntents.GuildPresences
-        )
+    let client = new DSharpPlus.DiscordClient(config)
 
-        let client = new DSharpPlus.DiscordClient(config)
+    let database = initDb ()
+    let botModules = initBotModules postmanType database
 
-        let database = initDb ()
-        let botModules = initBotModules postmanType database
+    botModules
+    |> Shared.BotModule.bindToClientsEvents
+        CommandParser.initCommandParser
+        CommandParser.start
+        cmd
+        (fun _ _ -> ())
+        client
 
-        botModules
-        |> Shared.BotModule.bindToClientsEvents
-            CommandParser.initCommandParser
-            CommandParser.start
-            cmd
-            (fun _ _ -> ())
-            client
+    client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
+        client.Logger.LogInformation(botEventId, "Client is ready to process events.")
 
-        client.add_Ready(Emzi0767.Utilities.AsyncEventHandler (fun client readyEventArgs ->
-            client.Logger.LogInformation(botEventId, "Client is ready to process events.")
+        Task.CompletedTask
+    ))
 
-            Task.CompletedTask
-        ))
+    client.add_ClientErrored(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+        client.Logger.LogError(botEventId, e.Exception, "Exception occured", [||])
 
-        client.add_ClientErrored(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            client.Logger.LogError(botEventId, e.Exception, "Exception occured", [||])
+        Task.CompletedTask
+    ))
 
-            Task.CompletedTask
-        ))
+    client.add_GuildDownloadCompleted(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
+        let activity = DSharpPlus.Entities.DiscordActivity("Собираю новогодние поздравления!")
+        awaiti <| client.UpdateStatusAsync(activity)
 
-        client.add_GuildDownloadCompleted(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-            let activity = DSharpPlus.Entities.DiscordActivity("Собираю новогодние поздравления!")
-            awaiti <| client.UpdateStatusAsync(activity)
+        Task.CompletedTask
+    ))
 
-            Task.CompletedTask
-        ))
+    awaiti <| client.ConnectAsync()
 
-        awaiti <| client.ConnectAsync()
+    // awaiti <| Task.Delay -1
+    startServer ()
 
-        // awaiti <| Task.Delay -1
-        startServer ()
-
-        0
+    0
