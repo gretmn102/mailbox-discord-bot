@@ -27,9 +27,9 @@ let cmd pstart (client: DSharpPlus.DiscordClient) (e: DSharpPlus.EventArgs.Messa
         | Left x ->
             awaiti (client.SendMessageAsync (e.Channel, (sprintf "Ошибка:\n```\n%s\n```" x)))
 
-let initBotModules (db: MongoDB.Driver.IMongoDatabase) =
+let initBotModules postmanType (db: MongoDB.Driver.IMongoDatabase) =
     [|
-        Mail.Main.create db
+        Mail.Main.create postmanType db
     |]
 
 open MongoDB.Driver
@@ -72,6 +72,20 @@ let startServer () =
 
 [<EntryPoint>]
 let main argv =
+    let getPostmanType next =
+        let postmanTypeEnvVar = "PostmanType"
+        match tryGetEnvironmentVariable postmanTypeEnvVar with
+        | None ->
+            printfn "Environment variable `%s` is not set!" postmanTypeEnvVar
+            2
+        | Some var ->
+            match Mail.Main.PostmanType.tryDeserialize var with
+            | Error errMsg ->
+                printfn "%s" errMsg
+                2
+            | Ok postmanType ->
+                next postmanType
+
     let tokenEnvVar = "BotToken"
 
     match tryGetEnvironmentVariable tokenEnvVar with
@@ -79,6 +93,7 @@ let main argv =
         printfn "Environment variable `%s` is not set!" tokenEnvVar
         1
     | Some token ->
+        getPostmanType <| fun postmanType ->
         let config = DSharpPlus.DiscordConfiguration()
 
         config.set_Token token
@@ -93,7 +108,7 @@ let main argv =
         let client = new DSharpPlus.DiscordClient(config)
 
         let database = initDb ()
-        let botModules = initBotModules database
+        let botModules = initBotModules postmanType database
 
         botModules
         |> Shared.BotModule.bindToClientsEvents

@@ -88,6 +88,22 @@ module EditAction =
                 preturnToMails
             ]
 
+[<Struct>]
+type PostmanType =
+    | SantaClaus
+    | Valentine
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module PostmanType =
+    let tryDeserialize = function
+        | "SantaClaus" -> Ok SantaClaus
+        | "Valentine" -> Ok Valentine
+        | unknown ->
+            let values =
+                Reflection.Reflection.unionEnum<PostmanType>
+            sprintf "Unknown '%s' postman type. Available values: %A" unknown values
+            |> Error
+
 type MainAction =
     | CreateMail of UserId
     | DisplayMails
@@ -104,14 +120,17 @@ module MainAction =
         type 'Result Parser = Primitives.Parser<'Result, unit>
 
         module CommandNames =
-            let displayMails = "письма"
+            let displayMails (postmanType: PostmanType) =
+                match postmanType with
+                | SantaClaus -> "письма"
+                | Valentine -> "валентинки"
             let createMail = "создать"
             let editMail = "редактировать"
             let removeMail = "удалить"
 
-        let pdisplayMails: _ Parser =
+        let pdisplayMails (postmanType: PostmanType): _ Parser =
             let p =
-                skipStringCI CommandNames.displayMails
+                skipStringCI (CommandNames.displayMails postmanType)
 
             p >>% DisplayMails
 
@@ -136,9 +155,9 @@ module MainAction =
 
             p |>> RemoveMail
 
-        let start: _ Parser =
+        let start (postmanType: PostmanType): _ Parser =
             choice [
-                pdisplayMails
+                pdisplayMails postmanType
                 pcreateMail
                 peditMail
                 premoveMail
@@ -151,7 +170,9 @@ type Action =
 type Msg =
     | Request of DiscordClient * EventArgs.MessageCreateEventArgs
 
-let reduce (msg: Msg) (state: State): State =
+let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
+    let displayMailCommandName = MainAction.Parser.CommandNames.displayMails postmanType
+
     match msg with
     | Request(client, e) ->
         let send msg =
@@ -192,16 +213,35 @@ let reduce (msg: Msg) (state: State): State =
                         e.Author.Id
                         id
 
-                [
-                    "Хо-хо-хо! Я — бот, рассылающий поздравления людям под Новый год! <:satan:1044024010113032212>"
-                    sprintf "Введи `%s <id_пользователя>`, чтобы начать писать поздравление указанному пользователю. Например:" MainAction.Parser.CommandNames.createMail
-                    "```"
-                    sprintf "%s %d" MainAction.Parser.CommandNames.createMail client.CurrentUser.Id
-                    "```"
-                    "Начнешь писать письмо мне, но я все равно его не оценю, поэтому лучше направить свои силы на кого-то другого. После того, как напишешь, следуй моим указаниям."
-                ]
-                |> String.concat "\n"
-                |> send
+                let msg =
+                    match postmanType with
+                    | SantaClaus ->
+                        [
+                            "Хо-хо-хо! Я — бот, рассылающий поздравления людям под Новый год! <:satan:1044024010113032212>"
+                            sprintf "Введи `%s <id_пользователя>`, чтобы начать писать поздравление указанному пользователю. Например:" MainAction.Parser.CommandNames.createMail
+                            "```"
+                            sprintf "%s %d" MainAction.Parser.CommandNames.createMail client.CurrentUser.Id
+                            "```"
+                            "Начнешь писать письмо мне, но я все равно его не оценю, поэтому лучше направить свои силы на кого-то другого. После того, как напишешь, следуй моим указаниям."
+                        ]
+                        |> String.concat "\n"
+                    | Valentine ->
+                        [
+                            "П-привет! Сегодня мой первый рабочий день, и я немного волнуюсь, поэтому... Что, какой запах валерьянки?! Это одеколон! :scream_cat:"
+                            "Ладно, о чем это я? Ах, да: день влюбленных! Пора романтики, грез и... валентинок. Я как раз такие собираю и доставляю другим половинкам."
+                            sprintf "Введи `%s <id_пользователя>`, чтобы начать писать валентинку указанному пользователю." MainAction.Parser.CommandNames.createMail
+                            ""
+                            "Например, если написать так:"
+                            "```"
+                            sprintf "%s %d" MainAction.Parser.CommandNames.createMail client.CurrentUser.Id
+                            "```"
+                            "То эта валентика придет ко м-мне, воть."
+                            "*Неловко мнется*"
+                            ""
+                            "После того, как напишешь, следуй дальнейшим указаниям, и всё будет хорошо 🐱"
+                        ]
+                        |> String.concat "\n"
+                send msg
 
                 { state with
                     UserEditStates = userEditStates
@@ -211,26 +251,50 @@ let reduce (msg: Msg) (state: State): State =
                 next userState
 
         let mainCommands =
-            [
-                "Доступные команды:"
-                sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" MainAction.Parser.CommandNames.createMail
-                sprintf "• `%s` — отображает список написанных писем;" MainAction.Parser.CommandNames.displayMails
-                sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail MainAction.Parser.CommandNames.displayMails
-                sprintf "• `%s <индекс_письма>` — удалить письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.removeMail MainAction.Parser.CommandNames.displayMails
-            ]
-            |> String.concat "\n"
+            match postmanType with
+            | SantaClaus ->
+                [
+                    "Доступные команды:"
+                    sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" MainAction.Parser.CommandNames.createMail
+                    sprintf "• `%s` — отображает список написанных писем;" displayMailCommandName
+                    sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail displayMailCommandName
+                    sprintf "• `%s <индекс_письма>` — удалить письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.removeMail displayMailCommandName
+                ]
+                |> String.concat "\n"
+            | Valentine ->
+                [
+                    "Доступные команды:"
+                    sprintf "• `%s <id_пользователя>` — начать писать валентинку указанному пользователю;" MainAction.Parser.CommandNames.createMail
+                    sprintf "• `%s` — отображает список написанных валентинок;" displayMailCommandName
+                    sprintf "• `%s <индекс_валентинки>` — начать редактировать валентинку с указанным индексом. Посмотреть индексы валентинок можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail displayMailCommandName
+                    sprintf "• `%s <индекс_валентинки>` — удалить валентинку с указанным индексом. Посмотреть индексы валентинок можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.removeMail displayMailCommandName
+                ]
+                |> String.concat "\n"
 
         let editCommands =
-            [
-                sprintf "Ты находишься в режиме редактирования письма. Доступные команды:"
-                sprintf "• `%s` — отображает письмо в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
-                sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
-                sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
-                sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
-                sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
-                sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
-            ]
-            |> String.concat "\n"
+            match postmanType with
+            | SantaClaus ->
+                [
+                    sprintf "Ты находишься в режиме редактирования письма. Доступные команды:"
+                    sprintf "• `%s` — отображает письмо в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
+                    sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
+                    sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
+                    sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
+                    sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
+                    sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
+                ]
+                |> String.concat "\n"
+            | Valentine ->
+                [
+                    sprintf "Ты находишься в режиме редактирования валентинки. Доступные команды:"
+                    sprintf "• `%s` — отображает валентинки в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
+                    sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
+                    sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
+                    sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
+                    sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
+                    sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
+                ]
+                |> String.concat "\n"
 
         let parseCommandByUserState (userState: UserEditStates.Data) next =
             match userState.Data.Editing with
@@ -244,7 +308,7 @@ let reduce (msg: Msg) (state: State): State =
 
                     state
             | None ->
-                match FParsecExt.runResult MainAction.Parser.start e.Message.Content with
+                match FParsecExt.runResult (MainAction.Parser.start postmanType) e.Message.Content with
                 | Ok act ->
                     next (MainAction act)
                 | Error msg ->
@@ -284,7 +348,11 @@ let reduce (msg: Msg) (state: State): State =
                 | Some mail ->
                     next mail
                 | None ->
-                    sprintf "Письмо удалилось по какой-то причине. Начните заново."
+                    match postmanType with
+                    | SantaClaus ->
+                        sprintf "Письмо удалилось по какой-то причине. Начните заново."
+                    | Valentine ->
+                        sprintf "Валентинка удалилась по какой-то причине. Начните заново."
                     |> send
 
                     state
@@ -362,7 +430,11 @@ let reduce (msg: Msg) (state: State): State =
                     | Some mails ->
                         next mails
                     | None ->
-                        "Список писем пуст."
+                        match postmanType with
+                        | SantaClaus ->
+                            "Список писем пуст."
+                        | Valentine ->
+                            "Список валентинок пуст."
                         |> send
 
                 getMails <| fun mails ->
@@ -396,9 +468,15 @@ let reduce (msg: Msg) (state: State): State =
                 | Some mail ->
                     next mail
                 | None ->
-                    sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
-                        mailIndex
-                        MainAction.Parser.CommandNames.displayMails
+                    match postmanType with
+                    | SantaClaus ->
+                        sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
+                            mailIndex
+                            displayMailCommandName
+                    | Valentine ->
+                        sprintf "Валентинка под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
+                            mailIndex
+                            displayMailCommandName
                     |> send
 
                     state
@@ -495,7 +573,7 @@ let reduce (msg: Msg) (state: State): State =
 
                 state
 
-let create db =
+let create (postmanType: PostmanType) db =
     let m =
         let init: State = {
             Mails = Mails.MailDb.init "mailboxUsers" db
@@ -508,7 +586,7 @@ let create db =
                     let! msg = mail.Receive()
                     let state =
                         try
-                            reduce msg state
+                            reduce postmanType msg state
                         with e ->
                             printfn "%A" e
                             state
