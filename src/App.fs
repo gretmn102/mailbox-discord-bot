@@ -134,7 +134,14 @@ let main argv =
     ))
 
     client.add_GuildDownloadCompleted(Emzi0767.Utilities.AsyncEventHandler (fun client e ->
-        let activity = DSharpPlus.Entities.DiscordActivity("Собираю новогодние поздравления!")
+        let status =
+            match postmanType with
+            | Mail.Main.SantaClaus ->
+                "Собираю новогодние поздравления!"
+            | Mail.Main.Valentine ->
+                "Собираю валентинки!"
+
+        let activity = DSharpPlus.Entities.DiscordActivity(status)
         awaiti <| client.UpdateStatusAsync(activity)
 
         Task.CompletedTask
