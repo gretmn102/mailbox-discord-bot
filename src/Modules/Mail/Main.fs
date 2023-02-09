@@ -278,7 +278,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                     sprintf "Ты находишься в режиме редактирования письма. Доступные команды:"
                     sprintf "• `%s` — отображает письмо в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
                     sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
-                    sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
+                    sprintf "• `%s <произвольный_набор_символов>` — указывает отправителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
                     sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
                     sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
                     sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
@@ -287,12 +287,12 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
             | Valentine ->
                 [
                     sprintf "Ты находишься в режиме редактирования валентинки. Доступные команды:"
-                    sprintf "• `%s` — отображает валентинки в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
+                    sprintf "• `%s` — отображает валентинку в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
                     sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
-                    sprintf "• `%s <произвольный_набор_символов>` — указывает отрпавителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
+                    sprintf "• `%s <произвольный_набор_символов>` — указывает отправителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
                     sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
                     sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
-                    sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
+                    sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых валентинок, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
                 ]
                 |> String.concat "\n"
 
@@ -509,7 +509,11 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
 
                 match Mails.MailDb.removeByMail mail state.Mails with
                 | Some mails ->
-                    sprintf "Поздравление № %d удалено." mailIndex
+                    match postmanType with
+                    | SantaClaus ->
+                        sprintf "Поздравление № %d удалено." mailIndex
+                    | Valentine ->
+                        sprintf "Валентинка № %d удалена." mailIndex
                     |> send
 
                     displayMails mails
@@ -518,7 +522,11 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                         Mails = mails
                     }
                 | None ->
-                    sprintf "Поздравление № %d не удалось удалить. Повторите еще раз." mailIndex
+                    match postmanType with
+                    | SantaClaus ->
+                        sprintf "Поздравление № %d не удалось удалить. Повторите еще раз." mailIndex
+                    | Valentine ->
+                        sprintf "Валентинку № %d не удалось удалить. Повторите еще раз." mailIndex
                     |> send
 
                     displayMails state.Mails
