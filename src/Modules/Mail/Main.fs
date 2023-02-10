@@ -137,6 +137,38 @@ type MainAction =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module MainAction =
+    module CommandNames =
+        let displayMails (postmanType: PostmanType) =
+            match postmanType with
+            | SantaClaus -> "письма"
+            | Valentine -> "валентинки"
+        let createMail = "создать"
+        let editMail = "редактировать"
+        let removeMail = "удалить"
+
+    let help postmanType =
+        let displayMailCommandName = CommandNames.displayMails postmanType
+
+        match postmanType with
+        | SantaClaus ->
+            [
+                "Доступные команды:"
+                sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" CommandNames.createMail
+                sprintf "• `%s` — отображает список написанных писем;" displayMailCommandName
+                sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" CommandNames.editMail displayMailCommandName
+                sprintf "• `%s <индекс_письма>` — удалить письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" CommandNames.removeMail displayMailCommandName
+            ]
+            |> String.concat "\n"
+        | Valentine ->
+            [
+                "Доступные команды:"
+                sprintf "• `%s <id_пользователя>` — начать писать валентинку указанному пользователю;" CommandNames.createMail
+                sprintf "• `%s` — отображает список написанных валентинок;" displayMailCommandName
+                sprintf "• `%s <индекс_валентинки>` — начать редактировать валентинку с указанным индексом. Посмотреть индексы валентинок можно командой `%s` в графе `№`" CommandNames.editMail displayMailCommandName
+                sprintf "• `%s <индекс_валентинки>` — удалить валентинку с указанным индексом. Посмотреть индексы валентинок можно командой `%s` в графе `№`" CommandNames.removeMail displayMailCommandName
+            ]
+            |> String.concat "\n"
+
     module Parser =
         open FParsec
 
@@ -144,14 +176,6 @@ module MainAction =
 
         type 'Result Parser = Primitives.Parser<'Result, unit>
 
-        module CommandNames =
-            let displayMails (postmanType: PostmanType) =
-                match postmanType with
-                | SantaClaus -> "письма"
-                | Valentine -> "валентинки"
-            let createMail = "создать"
-            let editMail = "редактировать"
-            let removeMail = "удалить"
 
         let pdisplayMails (postmanType: PostmanType): _ Parser =
             let p =
@@ -196,8 +220,6 @@ type Msg =
     | Request of DiscordClient * EventArgs.MessageCreateEventArgs
 
 let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
-    let displayMailCommandName = MainAction.Parser.CommandNames.displayMails postmanType
-
     match msg with
     | Request(client, e) ->
         let send msg =
@@ -243,9 +265,9 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                     | SantaClaus ->
                         [
                             "Хо-хо-хо! Я — бот, рассылающий поздравления людям под Новый год! <:satan:1044024010113032212>"
-                            sprintf "Введи `%s <id_пользователя>`, чтобы начать писать поздравление указанному пользователю. Например:" MainAction.Parser.CommandNames.createMail
+                            sprintf "Введи `%s <id_пользователя>`, чтобы начать писать поздравление указанному пользователю. Например:" MainAction.CommandNames.createMail
                             "```"
-                            sprintf "%s %d" MainAction.Parser.CommandNames.createMail client.CurrentUser.Id
+                            sprintf "%s %d" MainAction.CommandNames.createMail client.CurrentUser.Id
                             "```"
                             "Начнешь писать письмо мне, но я все равно его не оценю, поэтому лучше направить свои силы на кого-то другого. После того, как напишешь, следуй моим указаниям."
                         ]
@@ -254,11 +276,11 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                         [
                             "П-привет! Сегодня мой первый рабочий день, и я немного волнуюсь, поэтому... Что, какой запах валерьянки?! Это одеколон! :scream_cat:"
                             "Ладно, о чем это я? Ах, да: день влюбленных! Пора романтики, грез и... валентинок. Я как раз такие собираю и доставляю другим половинкам."
-                            sprintf "Введи `%s <id_пользователя>`, чтобы начать писать валентинку указанному пользователю." MainAction.Parser.CommandNames.createMail
+                            sprintf "Введи `%s <id_пользователя>`, чтобы начать писать валентинку указанному пользователю." MainAction.CommandNames.createMail
                             ""
                             "Например, если написать так:"
                             "```"
-                            sprintf "%s %d" MainAction.Parser.CommandNames.createMail client.CurrentUser.Id
+                            sprintf "%s %d" MainAction.CommandNames.createMail client.CurrentUser.Id
                             "```"
                             "То эта валентика придет ко м-мне, воть."
                             "*Неловко мнется*"
@@ -274,27 +296,6 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
 
             | Some userState ->
                 next userState
-
-        let mainCommands =
-            match postmanType with
-            | SantaClaus ->
-                [
-                    "Доступные команды:"
-                    sprintf "• `%s <id_пользователя>` — начать писать поздравление указанному пользователю;" MainAction.Parser.CommandNames.createMail
-                    sprintf "• `%s` — отображает список написанных писем;" displayMailCommandName
-                    sprintf "• `%s <индекс_письма>` — начать редактировать письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail displayMailCommandName
-                    sprintf "• `%s <индекс_письма>` — удалить письмо с указанным индексом. Посмотреть индексы писем можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.removeMail displayMailCommandName
-                ]
-                |> String.concat "\n"
-            | Valentine ->
-                [
-                    "Доступные команды:"
-                    sprintf "• `%s <id_пользователя>` — начать писать валентинку указанному пользователю;" MainAction.Parser.CommandNames.createMail
-                    sprintf "• `%s` — отображает список написанных валентинок;" displayMailCommandName
-                    sprintf "• `%s <индекс_валентинки>` — начать редактировать валентинку с указанным индексом. Посмотреть индексы валентинок можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.editMail displayMailCommandName
-                    sprintf "• `%s <индекс_валентинки>` — удалить валентинку с указанным индексом. Посмотреть индексы валентинок можно командой `%s` в графе `№`" MainAction.Parser.CommandNames.removeMail displayMailCommandName
-                ]
-                |> String.concat "\n"
 
         let parseCommandByUserState (userState: UserEditStates.Data) next =
             match userState.Data.Editing with
@@ -312,7 +313,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                 | Ok act ->
                     next (MainAction act)
                 | Error msg ->
-                    mainCommands
+                    MainAction.help postmanType
                     |> send
 
                     state
@@ -416,7 +417,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                             }
                         )
 
-                mainCommands
+                MainAction.help postmanType
                 |> send
 
                 { state with
@@ -468,6 +469,8 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                 | Some mail ->
                     next mail
                 | None ->
+                    let displayMailCommandName = MainAction.CommandNames.displayMails postmanType
+
                     match postmanType with
                     | SantaClaus ->
                         sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
