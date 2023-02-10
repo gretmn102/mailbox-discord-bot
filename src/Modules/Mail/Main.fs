@@ -293,6 +293,166 @@ module MainAction =
                 premoveMail
             ]
 
+    let handle postmanType send displayMail authorId act state =
+        let displayMails (mails: Mails.MailDb) =
+            let getMails next =
+                match Mails.MailDb.tryFindByUserId authorId mails with
+                | Some mails ->
+                    next mails
+                | None ->
+                    match postmanType with
+                    | SantaClaus ->
+                        "Список писем пуст."
+                    | Valentine ->
+                        "Список валентинок пуст."
+                    |> send
+
+            getMails <| fun mails ->
+
+            [
+                "№ | кому | описание"
+                yield! mails
+                |> List.mapi (fun i mailId ->
+                    match Mails.MailDb.tryFindById mailId state.Mails with
+                    | Some mail ->
+                        let description =
+                            let maxLength = 64
+                            let description =
+                                mail.Data.Description
+                                |> String.replace "\n" " "
+                            if description.Length < maxLength then
+                                description
+                            else
+                                description.[0..maxLength - 1]
+
+                        sprintf "%d | <@%d> | %s" i mail.Data.Recipient description
+                    | None ->
+                        sprintf "%d %s" i mailId
+                )
+            ]
+            |> String.concat "\n"
+            |> send
+
+        let getMailByIndex (mailIndex: MailIndex) next =
+            match Mails.MailDb.tryFindByMailIndex authorId mailIndex state.Mails with
+            | Some mail ->
+                next mail
+            | None ->
+                let displayMailCommandName = CommandNames.displayMails postmanType
+
+                match postmanType with
+                | SantaClaus ->
+                    sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
+                        mailIndex
+                        displayMailCommandName
+                | Valentine ->
+                    sprintf "Валентинка под номером %d не найдена. Попробуйте еще раз вызвать список валентинок командой `%s` и указать номер нужной валентинки для редактирования."
+                        mailIndex
+                        displayMailCommandName
+                |> send
+
+                state
+
+        match act with
+        | EditMail mailIndex ->
+            getMailByIndex mailIndex <| fun mail ->
+
+            let userEditStates =
+                state.UserEditStates
+                |> UserEditStates.GuildData.set
+                    authorId
+                    (fun x ->
+                        { x with
+                            Editing = Some mail.Id
+                        }
+                    )
+
+            EditAction.help postmanType
+            |> send
+
+            displayMail mail
+
+            { state with
+                UserEditStates = userEditStates
+            }
+
+        | RemoveMail mailIndex ->
+            getMailByIndex mailIndex <| fun mail ->
+
+            match Mails.MailDb.removeByMail mail state.Mails with
+            | Some mails ->
+                match postmanType with
+                | SantaClaus ->
+                    sprintf "Поздравление № %d удалено." mailIndex
+                | Valentine ->
+                    sprintf "Валентинка № %d удалена." mailIndex
+                |> send
+
+                displayMails mails
+
+                { state with
+                    Mails = mails
+                }
+            | None ->
+                match postmanType with
+                | SantaClaus ->
+                    sprintf "Поздравление № %d не удалось удалить. Повторите еще раз." mailIndex
+                | Valentine ->
+                    sprintf "Валентинку № %d не удалось удалить. Повторите еще раз." mailIndex
+                |> send
+
+                displayMails state.Mails
+
+                state
+
+        | CreateMail recipientId ->
+            let newMailId =
+                MailId.generateNew ()
+
+            let mailData =
+                { Mails.MailData.Empty with
+                    Author = authorId
+                    Recipient = recipientId
+                }
+
+            let mails =
+                state.Mails
+                |> Mails.MailDb.set
+                    newMailId
+                    (fun _ ->
+                        mailData
+                    )
+
+            let userEditStates =
+                state.UserEditStates
+                |> UserEditStates.GuildData.set
+                    authorId
+                    (fun x ->
+                        { x with
+                            Editing = Some newMailId
+                        }
+                    )
+
+            let mail =
+                Mails.Mail.create
+                    newMailId
+                    mailData
+
+            EditAction.help postmanType
+            |> send
+
+            displayMail mail
+
+            { state with
+                Mails = mails
+                UserEditStates = userEditStates
+            }
+
+        | DisplayMails ->
+            displayMails state.Mails
+
+            state
+
 type Action =
     | EditAction of EditAction * MailId
     | MainAction of MainAction
@@ -428,164 +588,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
             EditAction.handle postmanType send displayMail e.Author.Id mailId act state
 
         | MainAction(act) ->
-            let displayMails (mails: Mails.MailDb) =
-                let getMails next =
-                    match Mails.MailDb.tryFindByUserId e.Author.Id mails with
-                    | Some mails ->
-                        next mails
-                    | None ->
-                        match postmanType with
-                        | SantaClaus ->
-                            "Список писем пуст."
-                        | Valentine ->
-                            "Список валентинок пуст."
-                        |> send
-
-                getMails <| fun mails ->
-
-                [
-                    "№ | кому | описание"
-                    yield! mails
-                    |> List.mapi (fun i mailId ->
-                        match Mails.MailDb.tryFindById mailId state.Mails with
-                        | Some mail ->
-                            let description =
-                                let maxLength = 64
-                                let description =
-                                    mail.Data.Description
-                                    |> String.replace "\n" " "
-                                if description.Length < maxLength then
-                                    description
-                                else
-                                    description.[0..maxLength - 1]
-
-                            sprintf "%d | <@%d> | %s" i mail.Data.Recipient description
-                        | None ->
-                            sprintf "%d %s" i mailId
-                    )
-                ]
-                |> String.concat "\n"
-                |> send
-
-            let getMailByIndex (mailIndex: MailIndex) next =
-                match Mails.MailDb.tryFindByMailIndex e.Author.Id mailIndex state.Mails with
-                | Some mail ->
-                    next mail
-                | None ->
-                    let displayMailCommandName = MainAction.CommandNames.displayMails postmanType
-
-                    match postmanType with
-                    | SantaClaus ->
-                        sprintf "Письмо под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
-                            mailIndex
-                            displayMailCommandName
-                    | Valentine ->
-                        sprintf "Валентинка под номером %d не найдено. Попробуйте еще раз вызвать список писем командой `%s` и указать номер нужного письма для редактирования."
-                            mailIndex
-                            displayMailCommandName
-                    |> send
-
-                    state
-
-            match act with
-            | EditMail mailIndex ->
-                getMailByIndex mailIndex <| fun mail ->
-
-                let userEditStates =
-                    state.UserEditStates
-                    |> UserEditStates.GuildData.set
-                        e.Author.Id
-                        (fun x ->
-                            { x with
-                                Editing = Some mail.Id
-                            }
-                        )
-
-                EditAction.help postmanType
-                |> send
-
-                displayMail mail
-
-                { state with
-                    UserEditStates = userEditStates
-                }
-
-            | RemoveMail mailIndex ->
-                getMailByIndex mailIndex <| fun mail ->
-
-                match Mails.MailDb.removeByMail mail state.Mails with
-                | Some mails ->
-                    match postmanType with
-                    | SantaClaus ->
-                        sprintf "Поздравление № %d удалено." mailIndex
-                    | Valentine ->
-                        sprintf "Валентинка № %d удалена." mailIndex
-                    |> send
-
-                    displayMails mails
-
-                    { state with
-                        Mails = mails
-                    }
-                | None ->
-                    match postmanType with
-                    | SantaClaus ->
-                        sprintf "Поздравление № %d не удалось удалить. Повторите еще раз." mailIndex
-                    | Valentine ->
-                        sprintf "Валентинку № %d не удалось удалить. Повторите еще раз." mailIndex
-                    |> send
-
-                    displayMails state.Mails
-
-                    state
-
-            | CreateMail recipientId ->
-                let newMailId =
-                    MailId.generateNew ()
-
-                let mailData =
-                    { Mails.MailData.Empty with
-                        Author = e.Author.Id
-                        Recipient = recipientId
-                    }
-
-                let mails =
-                    state.Mails
-                    |> Mails.MailDb.set
-                        newMailId
-                        (fun _ ->
-                            mailData
-                        )
-
-                let userEditStates =
-                    state.UserEditStates
-                    |> UserEditStates.GuildData.set
-                        e.Author.Id
-                        (fun x ->
-                            { x with
-                                Editing = Some newMailId
-                            }
-                        )
-
-                let mail =
-                    Mails.Mail.create
-                        newMailId
-                        mailData
-
-                EditAction.help postmanType
-                |> send
-
-                displayMail mail
-
-                { state with
-                    Mails = mails
-                    UserEditStates = userEditStates
-                }
-
-            | DisplayMails ->
-                displayMails state.Mails
-
-                state
+            MainAction.handle postmanType send displayMail e.Author.Id act state
 
 let create (postmanType: PostmanType) db =
     let m =
