@@ -13,6 +13,22 @@ type State =
         UserEditStates: UserEditStates.GuildData
     }
 
+[<Struct>]
+type PostmanType =
+    | SantaClaus
+    | Valentine
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess>]
+module PostmanType =
+    let tryDeserialize = function
+        | "SantaClaus" -> Ok SantaClaus
+        | "Valentine" -> Ok Valentine
+        | unknown ->
+            let values =
+                Reflection.Reflection.unionEnum<PostmanType>
+            sprintf "Unknown '%s' postman type. Available values: %A" unknown values
+            |> Error
+
 type EditAction =
     | Display
     | To of UserId
@@ -23,20 +39,45 @@ type EditAction =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 [<RequireQualifiedAccess>]
 module EditAction =
+    module CommandNames =
+        let display = "отобразить"
+        let ``to`` = "кому"
+        let from = "от"
+        let description = "описание"
+        let returnToMails = "вернуться"
+        let image = "картинка"
+
+    let help postmanType =
+        match postmanType with
+        | SantaClaus ->
+            [
+                sprintf "Ты находишься в режиме редактирования письма. Доступные команды:"
+                sprintf "• `%s` — отображает письмо в том виде, которое получит указанный пользователь" CommandNames.display
+                sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" CommandNames.``to``
+                sprintf "• `%s <произвольный_набор_символов>` — указывает отправителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" CommandNames.from
+                sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" CommandNames.description
+                sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" CommandNames.image
+                sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" CommandNames.returnToMails
+            ]
+            |> String.concat "\n"
+        | Valentine ->
+            [
+                sprintf "Ты находишься в режиме редактирования валентинки. Доступные команды:"
+                sprintf "• `%s` — отображает валентинку в том виде, которое получит указанный пользователь" CommandNames.display
+                sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" CommandNames.``to``
+                sprintf "• `%s <произвольный_набор_символов>` — указывает отправителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" CommandNames.from
+                sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" CommandNames.description
+                sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" CommandNames.image
+                sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых валентинок, либо же подредактировать существующие!" CommandNames.returnToMails
+            ]
+            |> String.concat "\n"
+
     module Parser =
         open FParsec
 
         open DiscordMessage.Parser
 
         type 'Result Parser = Primitives.Parser<'Result, unit>
-
-        module CommandNames =
-            let display = "отобразить"
-            let ``to`` = "кому"
-            let from = "от"
-            let description = "описание"
-            let returnToMails = "вернуться"
-            let image = "картинка"
 
         let pdisplay: _ Parser =
             let p =
@@ -87,22 +128,6 @@ module EditAction =
                 pimage
                 preturnToMails
             ]
-
-[<Struct>]
-type PostmanType =
-    | SantaClaus
-    | Valentine
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-[<RequireQualifiedAccess>]
-module PostmanType =
-    let tryDeserialize = function
-        | "SantaClaus" -> Ok SantaClaus
-        | "Valentine" -> Ok Valentine
-        | unknown ->
-            let values =
-                Reflection.Reflection.unionEnum<PostmanType>
-            sprintf "Unknown '%s' postman type. Available values: %A" unknown values
-            |> Error
 
 type MainAction =
     | CreateMail of UserId
@@ -271,31 +296,6 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                 ]
                 |> String.concat "\n"
 
-        let editCommands =
-            match postmanType with
-            | SantaClaus ->
-                [
-                    sprintf "Ты находишься в режиме редактирования письма. Доступные команды:"
-                    sprintf "• `%s` — отображает письмо в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
-                    sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
-                    sprintf "• `%s <произвольный_набор_символов>` — указывает отправителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
-                    sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
-                    sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
-                    sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых поздравлений, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
-                ]
-                |> String.concat "\n"
-            | Valentine ->
-                [
-                    sprintf "Ты находишься в режиме редактирования валентинки. Доступные команды:"
-                    sprintf "• `%s` — отображает валентинку в том виде, которое получит указанный пользователь" EditAction.Parser.CommandNames.display
-                    sprintf "• `%s <id_пользователя>` — сменить получателя, если вдруг ошиблись с ID" EditAction.Parser.CommandNames.``to``
-                    sprintf "• `%s <произвольный_набор_символов>` — указывает отправителя. По умолчанию указан \"Аноним\", но ты можешь подписаться как угодно" EditAction.Parser.CommandNames.from
-                    sprintf "• `%s <произвольный_набор_символов>` — указывает содержимое сообщения" EditAction.Parser.CommandNames.description
-                    sprintf "• `%s [<ссылка на картинку>]` — добавляет внизу картинку. Чтобы убрать, напишите команду без аргументов" EditAction.Parser.CommandNames.image
-                    sprintf "• `%s` — вернуться в главное меню, чтобы написать кучу новых валентинок, либо же подредактировать существующие!" EditAction.Parser.CommandNames.returnToMails
-                ]
-                |> String.concat "\n"
-
         let parseCommandByUserState (userState: UserEditStates.Data) next =
             match userState.Data.Editing with
             | Some mailId ->
@@ -303,7 +303,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                 | Ok act ->
                     next (EditAction(act, mailId))
                 | Error msg ->
-                    editCommands
+                    EditAction.help postmanType
                     |> send
 
                     state
@@ -495,7 +495,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                             }
                         )
 
-                editCommands
+                EditAction.help postmanType
                 |> send
 
                 displayMail mail
@@ -566,7 +566,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
                         newMailId
                         mailData
 
-                editCommands
+                EditAction.help postmanType
                 |> send
 
                 displayMail mail
