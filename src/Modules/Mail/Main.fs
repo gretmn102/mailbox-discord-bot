@@ -129,6 +129,87 @@ module EditAction =
                 preturnToMails
             ]
 
+    let handle postmanType send displayMail authorId mailId act state =
+        let getMailById (mailId: MailId) next =
+            match Mails.MailDb.tryFindById mailId state.Mails with
+            | Some mail ->
+                next mail
+            | None ->
+                match postmanType with
+                | SantaClaus ->
+                    sprintf "Письмо удалилось по какой-то причине. Начните заново."
+                | Valentine ->
+                    sprintf "Валентинка удалилась по какой-то причине. Начните заново."
+                |> send
+
+                state
+
+        getMailById mailId <| fun mail ->
+
+        let update updating =
+            let newData =
+                updating mail.Data
+
+            let mails =
+                state.Mails
+                |> Mails.MailDb.set
+                    mail.Id
+                    (fun _ ->
+                        newData
+                    )
+
+            displayMail { mail with Data = newData }
+
+            { state with
+                Mails = mails
+            }
+
+        match act with
+        | Display ->
+            displayMail mail
+            state
+        | To ``to`` ->
+            update (fun mailData ->
+                { mailData with
+                    Recipient = ``to``
+                }
+            )
+        | From from ->
+            update (fun mailData ->
+                { mailData with
+                    From = from
+                }
+            )
+        | Description description ->
+            update (fun mailData ->
+                { mailData with
+                    Description = description
+                }
+            )
+        | ImageUrl imageUrl ->
+            update (fun mailData ->
+                { mailData with
+                    ImageUrl = imageUrl
+                }
+            )
+        | Return ->
+            let userEditStates =
+                state.UserEditStates
+                |> UserEditStates.GuildData.set
+                    authorId
+                    (fun x ->
+                        { x with
+                            Editing = None
+                        }
+                    )
+
+            help postmanType
+            |> send
+
+            { state with
+                UserEditStates = userEditStates
+            }
+
 type MainAction =
     | CreateMail of UserId
     | DisplayMails
@@ -344,85 +425,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
 
         match command with
         | EditAction(act, mailId) ->
-            let getMailById (mailId: MailId) next =
-                match Mails.MailDb.tryFindById mailId state.Mails with
-                | Some mail ->
-                    next mail
-                | None ->
-                    match postmanType with
-                    | SantaClaus ->
-                        sprintf "Письмо удалилось по какой-то причине. Начните заново."
-                    | Valentine ->
-                        sprintf "Валентинка удалилась по какой-то причине. Начните заново."
-                    |> send
-
-                    state
-
-            getMailById mailId <| fun mail ->
-
-            let update updating =
-                let newData =
-                    updating mail.Data
-
-                let mails =
-                    state.Mails
-                    |> Mails.MailDb.set
-                        mail.Id
-                        (fun _ ->
-                            newData
-                        )
-
-                displayMail { mail with Data = newData }
-
-                { state with
-                    Mails = mails
-                }
-
-            match act with
-            | Display ->
-                displayMail mail
-                state
-            | To ``to`` ->
-                update (fun mailData ->
-                    { mailData with
-                        Recipient = ``to``
-                    }
-                )
-            | From from ->
-                update (fun mailData ->
-                    { mailData with
-                        From = from
-                    }
-                )
-            | Description description ->
-                update (fun mailData ->
-                    { mailData with
-                        Description = description
-                    }
-                )
-            | ImageUrl imageUrl ->
-                update (fun mailData ->
-                    { mailData with
-                        ImageUrl = imageUrl
-                    }
-                )
-            | Return ->
-                let userEditStates =
-                    state.UserEditStates
-                    |> UserEditStates.GuildData.set
-                        e.Author.Id
-                        (fun x ->
-                            { x with
-                                Editing = None
-                            }
-                        )
-
-                MainAction.help postmanType
-                |> send
-
-                { state with
-                    UserEditStates = userEditStates
-                }
+            EditAction.handle postmanType send displayMail e.Author.Id mailId act state
 
         | MainAction(act) ->
             let displayMails (mails: Mails.MailDb) =
