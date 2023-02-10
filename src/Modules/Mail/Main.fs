@@ -129,7 +129,7 @@ module EditAction =
                 preturnToMails
             ]
 
-    let handle postmanType send displayMail authorId mailId act state =
+    let handle mainActionhelp postmanType send displayMail authorId mailId act state =
         let getMailById (mailId: MailId) next =
             match Mails.MailDb.tryFindById mailId state.Mails with
             | Some mail ->
@@ -203,7 +203,7 @@ module EditAction =
                         }
                     )
 
-            help postmanType
+            mainActionhelp postmanType
             |> send
 
             { state with
@@ -585,7 +585,7 @@ let reduce (postmanType: PostmanType) (msg: Msg) (state: State): State =
 
         match command with
         | EditAction(act, mailId) ->
-            EditAction.handle postmanType send displayMail e.Author.Id mailId act state
+            EditAction.handle MainAction.help postmanType send displayMail e.Author.Id mailId act state
 
         | MainAction(act) ->
             MainAction.handle postmanType send displayMail e.Author.Id act state
