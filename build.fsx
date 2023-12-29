@@ -15,7 +15,7 @@ open Fake.Core.TargetOperators
 // Build variables
 // --------------------------------------------------------------------------------------
 let f projName =
-    let pattern = sprintf @"**\%s.fsproj" projName
+    let pattern = sprintf @"**/%s.fsproj" projName
     let xs = !! pattern
     xs
     |> Seq.tryExactlyOne
@@ -26,7 +26,7 @@ let f projName =
     )
 
 let testProjName = "tests"
-let testProjPath = sprintf "tests\\%s.fsproj" testProjName
+let testProjPath = "tests" </> sprintf "%s.fsproj" testProjName
 
 let mainProjName = "mailbox-discord-bot"
 let mainProjPath = f mainProjName
@@ -44,12 +44,6 @@ let buildConf = DotNet.BuildConfiguration.Release
 // --------------------------------------------------------------------------------------
 // Targets
 // --------------------------------------------------------------------------------------
-let removeSQLiteInteropDll projPath =
-    let dir = Fake.IO.Path.getDirectory projPath
-    let localpath = sprintf "bin/%A/netcoreapp3.1/SQLite.Interop.dll" buildConf
-    let path = Fake.IO.Path.combine dir localpath
-    Fake.IO.File.delete path
-
 Target.create "Clean" (fun _ -> Shell.cleanDir deployDir)
 
 Target.create "BuildMain" (fun _ ->
